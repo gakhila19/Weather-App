@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Intelligence</title>
+  <!-- Compiled Tailwind CSS output -->
+  <link rel="stylesheet" href="./src/output.css" />
+  <!-- Google Fonts: Logo + UI fonts + monospace for code -->
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* CSS Custom Properties (Theme Variables) */
+    :root {
+      --accent:      #00e5ff;    /* Cyan accent color */
+      --accent2:     #ffd54f;    /* Yellow accent color */
+      --danger:      #ff5252;    /* Red for errors/alerts */
+      --glass-bg:    rgba(255,255,255,0.06);   /* Glassmorphism background */
+      --glass-bd:    rgba(255,255,255,0.11);   /* Glassmorphism border */
+      --radius-lg:   24px;
+      --radius-md:   16px;
+    }
+    body { font-family:'DM Sans',sans-serif; min-height:100vh; color:#fff; overflow-x:hidden; position:relative; }
+
+    /* Sky + particles */
+    #skyBg { position:fixed;inset:0;z-index:0; transition:background 1.8s ease; background:linear-gradient(160deg,#0a1520 0%,#0d2137 50%,#091524 100%); }
+    #rainLayer { position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden;display:none; }
+    .raindrop { position:absolute;top:-20px;width:1.5px;background:linear-gradient(to bottom,transparent,rgba(174,214,241,.7));border-radius:2px;animation:fall linear infinite; }
+    @keyframes fall { to { transform:translateY(110vh); } }
+    #snowLayer { position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden;display:none; }
+    .snowflake { position:absolute;top:-20px;color:rgba(220,240,255,.7);font-size:14px;animation:snowfall linear infinite;user-select:none; }
+    @keyframes snowfall { 0%{transform:translateY(0) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(360deg);opacity:.3} }
+    #lightning { position:fixed;inset:0;z-index:2;pointer-events:none;background:rgba(255,255,255,.25);display:none; }
+    #starsLayer { position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden; }
+    .star { position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d,3s) ease-in-out infinite alternate; }
+    @keyframes twinkle { from{opacity:.05} to{opacity:.7} }
+    .orb { position:fixed;border-radius:50%;filter:blur(90px);opacity:.18;pointer-events:none;animation:orbDrift 18s ease-in-out infinite alternate;z-index:1; }
+    .orb-a{width:460px;height:460px;background:#38bdf8;top:-130px;left:-100px;}
+    .orb-b{width:360px;height:360px;background:#818cf8;bottom:-90px;right:-80px;animation-delay:-8s;}
+    .orb-c{width:260px;height:260px;background:#fb923c;top:38%;left:42%;animation-delay:-14s;}
+    @keyframes orbDrift{from{transform:translate(0,0) scale(1)}to{transform:translate(35px,25px) scale(1.07)}}
+
+    /* Layout */
+    .page { position:relative;z-index:10;max-width:1080px;margin:0 auto;padding:24px 20px 60px; }
+
+    /* Navbar */
+    .navbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;}
+    .logo{font-family:'Bebas Neue',cursive;font-size:2rem;letter-spacing:.14em;color:var(--accent);text-shadow:0 0 28px rgba(0,229,255,.4);}
+    .logo span{color:rgba(255,255,255,.4);}
+    #liveClock{font-family:'DM Mono',monospace;font-size:.72rem;color:rgba(255,255,255,.35);letter-spacing:.08em;text-align:right;line-height:1.5;}
+
+    /* Search */
+    .search-area{position:relative;margin-bottom:12px;}
+    .search-row{display:flex;gap:10px;flex-wrap:wrap;}
+    .search-box{position:relative;flex:1;min-width:0;display:flex;align-items:center;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.14);border-radius:100px;padding:0 8px 0 20px;transition:border-color .25s,box-shadow .25s;}
+    .search-box:focus-within{border-color:rgba(0,229,255,.55);box-shadow:0 0 0 3px rgba(0,229,255,.1);}
+    #cityInput{flex:1;background:transparent;border:none;outline:none;font-family:'DM Sans',sans-serif;font-size:.9rem;color:#fff;padding:13px 0;}
+    #cityInput::placeholder{color:rgba(255,255,255,.3);}
+    .btn-search{background:linear-gradient(135deg,var(--accent),#007acc);border:none;border-radius:100px;padding:10px 22px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.82rem;color:#000;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:transform .2s,box-shadow .2s;}
+    .btn-search:hover{transform:scale(1.04);box-shadow:0 4px 18px rgba(0,229,255,.35);}
+    .btn-locate{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.15);border-radius:100px;padding:10px 16px;color:#fff;cursor:pointer;font-size:.88rem;flex-shrink:0;white-space:nowrap;transition:background .2s,transform .2s;}
+    .btn-locate:hover{background:rgba(255,255,255,.15);transform:scale(1.04);}
+
+    /* ── Recent Dropdown ── */
+    #recentDropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0; width: 100%;
+      background: rgba(6, 15, 30, 0.97);
+      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border: 1px solid rgba(0, 229, 255, 0.18);
+      border-radius: 20px;
+      z-index: 200;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(0,229,255,.05);
+      /* Slide-in animation */
+      transform-origin: top center;
+      animation: ddSlideIn .2s cubic-bezier(.22,.68,0,1.2) both;
+    }
+    @keyframes ddSlideIn {
+      from { opacity:0; transform: scaleY(.88) translateY(-8px); }
+      to   { opacity:1; transform: scaleY(1)   translateY(0); }
+    }
+
+    /* Header row */
+    .dd-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 18px 8px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .dd-title {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'DM Mono', monospace; font-size: .63rem;
+      letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.3);
+    }
+    .dd-count {
+      background: rgba(0,229,255,.15); border: 1px solid rgba(0,229,255,.25);
+      color: var(--accent); border-radius: 99px;
+      padding: 1px 7px; font-size: .6rem; font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .dd-clear {
+      font-family: 'DM Sans', sans-serif; font-size: .75rem; font-weight: 500;
+      color: rgba(255,100,100,.55); cursor: pointer;
+      padding: 4px 10px; border-radius: 6px;
+      border: 1px solid transparent;
+      transition: background .18s, color .18s, border-color .18s;
+    }
+    .dd-clear:hover {
+      background: rgba(255,60,60,.12); color: #ff6b6b;
+      border-color: rgba(255,80,80,.25);
+    }
+
+    /* Each city row */
+    .recent-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 18px; cursor: pointer;
+      border-top: 1px solid rgba(255,255,255,.04);
+      transition: background .15s;
+      position: relative;
+    }
+    .recent-item:hover,
+    .recent-item.kbd-focus {
+      background: rgba(0,229,255,.08);
+    }
+    .recent-item.kbd-focus::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--accent); border-radius: 0 2px 2px 0;
+    }
+    .ri-icon {
+      font-size: .95rem; flex-shrink: 0;
+      width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.06); border-radius: 8px;
+    }
+    .ri-body { flex: 1; min-width: 0; }
+    .ri-name {
+      font-size: .88rem; font-weight: 500; color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ri-meta {
+      font-family: 'DM Mono', monospace; font-size: .6rem;
+      color: rgba(255,255,255,.22); margin-top: 1px; letter-spacing: .03em;
+    }
+    .ri-rm {
+      flex-shrink: 0; color: rgba(255,255,255,.18); font-size: .8rem;
+      padding: 4px 8px; border-radius: 6px;
+      border: 1px solid transparent;
+      transition: color .15s, background .15s, border-color .15s; cursor: pointer;
+      line-height: 1;
+    }
+    .ri-rm:hover { color: #ff6b6b; background: rgba(255,60,60,.12); border-color: rgba(255,80,80,.2); }
+
+    /* Empty state inside dropdown */
+    .dd-empty {
+      padding: 22px 18px; text-align: center;
+      font-size: .8rem; color: rgba(255,255,255,.2);
+      font-family: 'DM Mono', monospace; letter-spacing: .06em;
+    }
+
+    /* Keyboard hint footer */
+    .dd-footer {
+      padding: 7px 18px;
+      border-top: 1px solid rgba(255,255,255,.05);
+      display: flex; gap: 12px;
+      font-family: 'DM Mono', monospace; font-size: .58rem;
+      color: rgba(255,255,255,.18); letter-spacing: .04em;
+    }
+    .dd-key {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 4px; padding: 1px 5px; margin-right: 3px;
+      font-size: .55rem; color: rgba(255,255,255,.3);
+    }
+
+    /* ── Weather Alert Banner ── */
+    #alertBanner {
+      display: none; margin-bottom: 14px;
+      background: linear-gradient(135deg, rgba(255,60,60,.16), rgba(255,140,0,.13));
+      border: 1px solid rgba(255,100,0,.38);
+      border-radius: var(--radius-md); padding: 14px 18px;
+      animation: alertPulse 2.5s ease-in-out infinite;
+    }
+    @keyframes alertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,80,0,.22)} 50%{box-shadow:0 0 0 8px rgba(255,80,0,0)} }
+    .alert-inner { display:flex; align-items:center; gap:10px; }
+    .alert-icon  { font-size:1.4rem; flex-shrink:0; }
+    .alert-text  { font-size:.88rem; font-weight:600; flex:1; }
+    .alert-close {
+      flex-shrink:0; background:none; border:none; color:rgba(255,255,255,.35);
+      font-size:1.1rem; cursor:pointer; padding:2px 6px; border-radius:4px;
+      transition:color .2s, background .2s; line-height:1;
+    }
+    .alert-close:hover { color:#fff; background:rgba(255,255,255,.1); }
+
+    /* ── Inline field error (below search bar) ── */
+    #inlineError {
+      display: none;
+      margin: 6px 4px 0;
+      font-size: .8rem; font-weight: 500;
+      color: #fca5a5;
+      animation: errShake .35s ease;
+    }
+    .inline-err-inner {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .inline-err-icon { font-size: .9rem; flex-shrink: 0; }
+    @keyframes errShake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    /* ── Error Modal Pop-up ── */
+    #errorModal {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    #errorModal.open { display: flex; }
+    .modal-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.6);
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      animation: backdropIn .25s ease;
+    }
+    @keyframes backdropIn { from{opacity:0} to{opacity:1} }
+    .modal-box {
+      position: relative; z-index: 1;
+      background: rgba(10, 20, 38, 0.97);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 24px;
+      padding: 32px 30px 28px;
+      max-width: 420px; width: 100%;
+      box-shadow: 0 24px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(255,100,100,.08);
+      animation: modalIn .28s cubic-bezier(.22,.68,0,1.15);
+      text-align: center;
+    }
+    @keyframes modalIn {
+      from { opacity:0; transform: scale(.88) translateY(20px); }
+      to   { opacity:1; transform: scale(1)   translateY(0); }
+    }
+    .modal-icon-wrap {
+      width: 64px; height: 64px; border-radius: 50%;
+      margin: 0 auto 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+    }
+    .modal-icon-wrap.error   { background: rgba(239,68,68,.15); border: 1.5px solid rgba(239,68,68,.3); }
+    .modal-icon-wrap.warning { background: rgba(245,158,11,.15); border: 1.5px solid rgba(245,158,11,.3); }
+    .modal-icon-wrap.info    { background: rgba(59,130,246,.15); border: 1.5px solid rgba(59,130,246,.3); }
+    .modal-title {
+      font-family: 'Bebas Neue', cursive; font-size: 1.6rem;
+      letter-spacing: .08em; margin-bottom: 10px;
+    }
+    .modal-title.error   { color: #fca5a5; }
+    .modal-title.warning { color: #fcd34d; }
+    .modal-title.info    { color: #93c5fd; }
+    .modal-body {
+      font-size: .88rem; color: rgba(255,255,255,.6);
+      line-height: 1.6; margin-bottom: 10px;
+    }
+    .modal-hint {
+      font-family: 'DM Mono', monospace; font-size: .72rem;
+      color: rgba(255,255,255,.28); letter-spacing: .04em;
+      margin-bottom: 22px; line-height: 1.5;
+    }
+    .modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .modal-btn {
+      border: none; border-radius: 100px; padding: 10px 24px;
+      font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: .84rem;
+      cursor: pointer; transition: transform .18s, box-shadow .18s, opacity .18s;
+    }
+    .modal-btn:hover { transform: scale(1.04); }
+    .modal-btn.primary {
+      background: linear-gradient(135deg, var(--accent), #007acc); color: #000;
+    }
+    .modal-btn.primary:hover { box-shadow: 0 4px 16px rgba(0,229,255,.35); }
+    .modal-btn.secondary {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #fff;
+    }
+    .modal-btn.secondary:hover { background: rgba(255,255,255,.14); }
+    .modal-close-x {
+      position: absolute; top: 14px; right: 16px;
+      background: none; border: none; color: rgba(255,255,255,.3);
+      font-size: 1.1rem; cursor: pointer; padding: 4px 8px;
+      border-radius: 6px; transition: color .18s, background .18s; line-height: 1;
+    }
+    .modal-close-x:hover { color: #fff; background: rgba(255,255,255,.1); }
+
+    /* ── Toast notification stack ── */
+    #toastStack {
+      position: fixed; top: 20px; right: 20px; z-index: 998;
+      display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none; max-width: 340px; width: calc(100vw - 40px);
+    }
+    .toast-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      border-radius: 14px; padding: 13px 14px;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid transparent; pointer-events: all;
+      animation: toastSlide .3s cubic-bezier(.22,.68,0,1.15) both;
+      position: relative; overflow: hidden;
+    }
+    @keyframes toastSlide {
+      from { opacity:0; transform: translateX(30px) scale(.95); }
+      to   { opacity:1; transform: translateX(0) scale(1); }
+    }
+    .toast-item.leaving {
+      animation: toastLeave .3s ease forwards;
+    }
+    @keyframes toastLeave {
+      to { opacity:0; transform: translateX(30px) scale(.9); max-height:0; margin:0; padding:0; }
+    }
+    .toast-item.error   { background:rgba(30,10,10,.93); border-color:rgba(239,68,68,.3); }
+    .toast-item.warning { background:rgba(30,20,5,.93);  border-color:rgba(245,158,11,.3); }
+    .toast-item.success { background:rgba(5,25,15,.93);  border-color:rgba(34,197,94,.3); }
+    .toast-item.info    { background:rgba(5,15,30,.93);  border-color:rgba(59,130,246,.3); }
+    .toast-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+    .toast-body { flex: 1; min-width: 0; }
+    .toast-title { font-weight: 600; font-size: .83rem; margin-bottom: 2px; }
+    .toast-title.error   { color: #fca5a5; }
+    .toast-title.warning { color: #fcd34d; }
+    .toast-title.success { color: #86efac; }
+    .toast-title.info    { color: #93c5fd; }
+    .toast-msg { font-size: .78rem; color: rgba(255,255,255,.5); line-height: 1.4; }
+    .toast-x {
+      flex-shrink: 0; background: none; border: none;
+      color: rgba(255,255,255,.25); cursor: pointer; font-size: .9rem;
+      padding: 0 2px; line-height: 1; transition: color .15s;
+      margin-top: 1px;
+    }
+    .toast-x:hover { color: rgba(255,255,255,.7); }
+    /* Progress bar at bottom of toast */
+    .toast-progress {
+      position: absolute; bottom: 0; left: 0; height: 2px;
+      border-radius: 0 0 14px 14px;
+      animation: toastProgress linear forwards;
+    }
+    .toast-item.error   .toast-progress { background: rgba(239,68,68,.6); }
+    .toast-item.warning .toast-progress { background: rgba(245,158,11,.6); }
+    .toast-item.success .toast-progress { background: rgba(34,197,94,.6); }
+    .toast-item.info    .toast-progress { background: rgba(59,130,246,.6); }
+    @keyframes toastProgress { from{width:100%} to{width:0%} }
+
+    /* Glass */
+    .glass{background:var(--glass-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--glass-bd);border-radius:var(--radius-lg);}
+    .sec-label{font-family:'DM Mono',monospace;font-size:.63rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.32);margin-bottom:14px;}
+    .divider{height:1px;background:rgba(255,255,255,.07);margin:18px 0;}
+
+    /* Loader / Hint */
+    #loaderSection{display:none;flex-direction:column;align-items:center;padding:80px 0;gap:16px;}
+    .spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loader-txt{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.3);}
+    #hintSection{text-align:center;padding:80px 0;}
+    .hint-globe{font-size:4.5rem;margin-bottom:12px;animation:floatBob 3s ease-in-out infinite;}
+    @keyframes floatBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+    /* Hero */
+    .hero-card{padding:28px 30px;margin-bottom:14px;position:relative;overflow:hidden;}
+    .hero-card::before{content:'';position:absolute;top:-50px;right:-50px;width:220px;height:220px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(0,229,255,.12) 0%,transparent 70%);}
+    .city-lbl{font-family:'DM Mono',monospace;font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:4px;}
+    #cityName{font-family:'Bebas Neue',cursive;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:.04em;line-height:1;}
+    #localDateTime{font-size:.72rem;color:rgba(255,255,255,.3);margin-top:4px;letter-spacing:.04em;}
+    .temp-row{display:flex;align-items:flex-end;gap:14px;margin:14px 0 6px;flex-wrap:wrap;}
+    #temperature{font-family:'Bebas Neue',cursive;font-size:clamp(5rem,12vw,9rem);line-height:1;text-shadow:0 0 60px rgba(0,229,255,.25);}
+    .temp-controls{display:flex;flex-direction:column;justify-content:flex-end;gap:8px;padding-bottom:10px;}
+    .unit-toggle{display:flex;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:100px;overflow:hidden;width:fit-content;}
+    .unit-btn{padding:5px 14px;font-family:'DM Mono',monospace;font-size:.72rem;font-weight:500;letter-spacing:.06em;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.4);transition:background .2s,color .2s;}
+    .unit-btn.active{background:var(--accent);color:#000;}
+    #conditionBadge{display:inline-block;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:100px;padding:4px 14px;font-size:.78rem;text-transform:capitalize;letter-spacing:.02em;}
+    .icon-glow{position:relative;display:inline-block;flex-shrink:0;}
+    .icon-glow::after{content:'';position:absolute;inset:-8px;border-radius:50%;background:radial-gradient(circle,rgba(0,229,255,.25) 0%,transparent 70%);animation:iconPulse 3s ease-in-out infinite;}
+    @keyframes iconPulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.15);opacity:1}}
+    #weatherIcon{width:88px;height:88px;position:relative;z-index:1;filter:drop-shadow(0 4px 20px rgba(0,229,255,.4));}
+
+    /* Stats grid */
+    .stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+    @media(min-width:500px){.stats-grid{grid-template-columns:repeat(4,1fr);}}
+    .stat-pill{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-md);padding:14px;text-align:center;transition:background .2s,transform .2s;cursor:default;}
+    .stat-pill:hover{background:rgba(255,255,255,.1);transform:translateY(-2px);}
+    .stat-ico{font-size:1.2rem;margin-bottom:5px;}
+    .stat-lbl{font-size:.63rem;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35);margin-bottom:3px;}
+    .stat-val{font-family:'Bebas Neue',cursive;font-size:1.1rem;letter-spacing:.04em;}
+
+    /* Hourly */
+    .hourly-wrap{padding:22px;margin-bottom:14px;}
+    .hourly-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+    .hourly-scroll::-webkit-scrollbar{display:none;}
+    .hour-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-md);padding:12px 14px;text-align:center;flex-shrink:0;min-width:68px;transition:background .2s,transform .2s;}
+    .hour-card:hover{background:rgba(0,229,255,.1);transform:translateY(-2px);}
+    .hour-time{font-family:'DM Mono',monospace;font-size:.63rem;color:rgba(255,255,255,.38);margin-bottom:6px;}
+    .hour-temp{font-family:'Bebas Neue',cursive;font-size:.95rem;letter-spacing:.04em;margin-top:5px;}
+    .hour-rain{font-size:.6rem;color:var(--accent);font-family:'DM Mono',monospace;margin-top:3px;}
+
+    /* Two col */
+    .two-col{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px;}
+    @media(min-width:700px){.two-col{grid-template-columns:1fr 1fr;}}
+    .panel{padding:22px;}
+
+    /* Sun tracker */
+    .sun-track{height:5px;background:rgba(255,255,255,.1);border-radius:99px;position:relative;margin:12px 0 20px;}
+    .sun-progress{height:100%;border-radius:99px;background:linear-gradient(90deg,#f97316,#facc15);transition:width .7s ease;}
+    .sun-dot{width:13px;height:13px;background:var(--accent2);border-radius:50%;position:absolute;top:-4px;box-shadow:0 0 10px var(--accent2);transition:left .7s ease;}
+
+    /* UV */
+    .uv-bar{height:5px;border-radius:99px;background:linear-gradient(90deg,#4ade80,#facc15,#f97316,#ef4444);position:relative;}
+    .uv-dot{position:absolute;top:50%;transform:translateY(-50%);width:12px;height:12px;background:#fff;border-radius:50%;box-shadow:0 0 8px rgba(0,229,255,.7);transition:left .7s ease;}
+
+    /* Bars */
+    .bar-wrap{display:flex;flex-direction:column;gap:14px;}
+    .bar-header{display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:6px;}
+    .bar-lbl{color:rgba(255,255,255,.45);}
+    .bar-val{font-weight:600;}
+    .bar-track{height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:99px;transition:width .7s ease;}
+    .fill-sky{background:linear-gradient(90deg,#38bdf8,#818cf8);}
+    .fill-blue{background:linear-gradient(90deg,#60a5fa,#38bdf8);}
+    .fill-wind{background:linear-gradient(90deg,#a78bfa,#818cf8);}
+
+    /* Forecast */
+    .fc-wrap{padding:22px;margin-bottom:14px;}
+    .fc-strip{display:flex;gap:8px;overflow-x:auto;}
+    .fc-strip::-webkit-scrollbar{display:none;}
+    .fc-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:var(--radius-md);padding:16px 10px;text-align:center;flex:1;min-width:92px;transition:background .22s,transform .22s,border-color .22s;}
+    .fc-card:hover{background:rgba(0,229,255,.08);border-color:rgba(0,229,255,.25);transform:translateY(-3px);}
+    .fc-day{font-family:'DM Mono',monospace;font-size:.61rem;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.38);margin-bottom:8px;}
+    .fc-hi{font-family:'Bebas Neue',cursive;font-size:1.1rem;letter-spacing:.04em;color:#fff;}
+    .fc-lo{font-size:.75rem;color:rgba(255,255,255,.35);}
+    .fc-desc{font-size:.63rem;color:rgba(255,255,255,.3);margin-top:3px;}
+    .fc-rain{font-family:'DM Mono',monospace;font-size:.6rem;color:var(--accent);margin-top:5px;}
+    .coord-pill{background:rgba(255,255,255,.05);border-radius:8px;padding:8px 12px;font-family:'DM Mono',monospace;font-size:.7rem;color:rgba(255,255,255,.45);margin-top:12px;}
+
+    /* Animations */
+    .fade-in{animation:fadeUp .5s ease both;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    .d1{animation-delay:.07s}.d2{animation-delay:.14s}.d3{animation-delay:.21s}.d4{animation-delay:.28s}
+
+    /* ── Responsive — iPad Mini (≤768px) ── */
+    @media(max-width:768px){
+      .page{padding:16px 14px 50px;}
+      .navbar{margin-bottom:20px;}
+      .logo{font-size:1.7rem;}
+      .hero-card{padding:22px 20px;}
+      #temperature{font-size:5.5rem;}
+      #weatherIcon{width:70px;height:70px;}
+      .two-col{grid-template-columns:1fr;}
+    }
+    /* ── Responsive — iPhone SE (≤390px) ── */
+    @media(max-width:390px){
+      .logo{font-size:1.4rem;}
+      #liveClock{display:none;}
+      .search-row{gap:7px;}
+      .btn-locate{width:100%;text-align:center;order:3;}
+      .hero-card{padding:16px;}
+      #temperature{font-size:4.5rem;}
+      #weatherIcon{width:56px;height:56px;}
+      .stats-grid{grid-template-columns:1fr 1fr;}
+      .stat-pill{padding:10px;}
+      .unit-btn{padding:4px 10px;}
+      .fc-card{min-width:70px;padding:10px 6px;}
+      .fc-strip{gap:5px;}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Backgrounds -->
+  <div id="skyBg"></div>
+  <div id="rainLayer"></div>
+  <div id="snowLayer"></div>
+  <div id="lightning"></div>
+  <div id="starsLayer"></div>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+
+  <!-- Toast notification stack (top-right) -->
+  <div id="toastStack"></div>
+
+  <!-- Error Modal Pop-up -->
+  <div id="errorModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-box">
+      <button class="modal-close-x" id="modalCloseX" aria-label="Close">✕</button>
+      <div class="modal-icon-wrap error" id="modalIconWrap">
+        <span id="modalIcon">⚠️</span>
+      </div>
+      <div class="modal-title error" id="modalTitle">Error</div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-hint" id="modalHint"></div>
+      <div class="modal-actions">
+        <button class="modal-btn primary" id="modalRetry">Try Again</button>
+        <button class="modal-btn secondary" id="modalDismiss">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page wrapper -->
+  <div class="page">
+
+    <!-- Navbar -->
+    <nav class="navbar fade-in">
+      <div class="logo">WEATHER<span>FORECAST</span></div>
+      <div id="liveClock"></div>
+    </nav>
+
+    <!-- Search -->
+    <div class="search-area fade-in d1">
+      <div class="search-row">
+        <div class="search-box">
+          <span style="font-size:1rem;opacity:.35;flex-shrink:0;margin-right:6px;">🔍</span>
+          <input id="cityInput" type="text" placeholder="Search any city — Tokyo, Paris, Hyderabad…" autocomplete="off" />
+        </div>
+        <button class="btn-search" id="searchBtn">Search</button>
+        <button class="btn-locate" id="locationBtn">📍 Locate</button>
+      </div>
+
+      <!-- Recent Dropdown — hidden until a search is made -->
+      <div id="recentDropdown" style="display:none;" role="listbox" aria-label="Recently searched cities">
+        <div class="dd-header">
+          <div class="dd-title">
+            🕐 Recent
+            <span class="dd-count" id="ddCount">0</span>
+          </div>
+          <span class="dd-clear" id="clearRecent" role="button" tabindex="0" title="Clear all recent searches">✕ Clear all</span>
+        </div>
+        <div id="recentList" role="group"></div>
+        <div class="dd-footer">
+          <span><kbd class="dd-key">↑↓</kbd>Navigate</span>
+          <span><kbd class="dd-key">↵</kbd>Select</span>
+          <span><kbd class="dd-key">Esc</kbd>Close</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inline field error -->
+    <div id="inlineError" role="alert" aria-live="polite">
+      <div class="inline-err-inner">
+        <span class="inline-err-icon">⚠</span>
+        <span id="inlineErrorText"></span>
+      </div>
+    </div>
+
+    <!-- Weather Alert Banner -->
+    <div id="alertBanner" role="alert">
+      <div class="alert-inner">
+        <div class="alert-icon" id="alertIcon">⚠️</div>
+        <div class="alert-text" id="alertText"></div>
+        <button class="alert-close" id="alertClose" aria-label="Dismiss alert">✕</button>
+      </div>
+    </div>
+
+    <!-- Hint -->
+    <div id="hintSection" class="fade-in d2">
+      <div class="hint-globe">🌍</div>
+      <p style="font-size:.88rem;color:rgba(255,255,255,.25);">Search a city or tap Locate to get started</p>
+    </div>
+
+    <!-- Loader -->
+    <div id="loaderSection">
+      <div class="spinner"></div>
+      <p class="loader-txt">Fetching atmosphere…</p>
+    </div>
+
+    <!-- Weather Content -->
+    <div id="weatherContent" class="hidden">
+
+      <!-- Hero -->
+      <div class="glass hero-card fade-in">
+        <div class="city-lbl">Current Weather</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:2px;">
+              <div id="cityName"></div>
+              <span id="countryBadge" style="font-size:.74rem;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:99px;padding:3px 12px;color:rgba(255,255,255,.55);"></span>
+            </div>
+            <div id="localDateTime" style="font-size:.72rem;color:rgba(255,255,255,.3);letter-spacing:.04em;"></div>
+
+            <div class="temp-row">
+              <div id="temperature"></div>
+              <div class="temp-controls">
+                <!-- Unit toggle - °C/°F only on today's temperature -->
+                <div class="unit-toggle">
+                  <button class="unit-btn active" id="btnC">°C</button>
+                  <button class="unit-btn" id="btnF">°F</button>
+                </div>
+                <div>
+                  <span id="conditionBadge"></span>
+                  <p style="font-size:.8rem;color:rgba(255,255,255,.4);margin-top:6px;">Feels like <span id="feelsLike" style="color:#fff;font-weight:600;"></span></p>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-size:.78rem;color:rgba(255,255,255,.35);">H:</span>
+              <span id="tempHigh" style="color:#93c5fd;font-weight:600;font-size:.9rem;"></span>
+              <span style="font-size:.78rem;color:rgba(255,255,255,.35);">L:</span>
+              <span id="tempLow" style="color:rgba(255,255,255,.45);font-size:.9rem;"></span>
+            </div>
+          </div>
+          <div class="icon-glow">
+            <img id="weatherIcon" src="" alt="" />
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="stats-grid">
+          <div class="stat-pill"><div class="stat-ico">💧</div><div class="stat-lbl">Humidity</div><div class="stat-val" id="humidity">—</div></div>
+          <div class="stat-pill"><div class="stat-ico">💨</div><div class="stat-lbl">Wind</div><div class="stat-val" id="wind">—</div></div>
+          <div class="stat-pill"><div class="stat-ico">👁</div><div class="stat-lbl">Visibility</div><div class="stat-val" id="visibility">—</div></div>
+          <div class="stat-pill"><div class="stat-ico">🌡️</div><div class="stat-lbl">Pressure</div><div class="stat-val" id="pressure">—</div></div>
+        </div>
+      </div>
+
+      <!-- Hourly -->
+      <div class="glass hourly-wrap fade-in d1">
+        <p class="sec-label">⏱ Hourly Forecast</p>
+        <div class="hourly-scroll" id="hourlyScroll"></div>
+      </div>
+
+      <!-- Sun + Atmosphere -->
+      <div class="two-col">
+        <div class="glass panel fade-in d2">
+          <p class="sec-label">☀️ Sun Tracker</p>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <div>
+              <p style="font-size:.63rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;font-family:'DM Mono',monospace;">Sunrise</p>
+              <p style="font-family:'Bebas Neue',cursive;font-size:1.3rem;letter-spacing:.05em;" id="sunrise">—</p>
+            </div>
+            <div style="text-align:right;">
+              <p style="font-size:.63rem;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;font-family:'DM Mono',monospace;">Sunset</p>
+              <p style="font-family:'Bebas Neue',cursive;font-size:1.3rem;letter-spacing:.05em;" id="sunset">—</p>
+            </div>
+          </div>
+          <div class="sun-track">
+            <div class="sun-progress" id="sunProgress" style="width:0%"></div>
+            <div class="sun-dot" id="sunDot" style="left:0%"></div>
+          </div>
+          <div class="divider" style="margin:12px 0;"></div>
+          <p class="sec-label" style="margin-bottom:8px;">🔆 UV Index</p>
+          <div class="uv-bar">
+            <div class="uv-dot" id="uvDot" style="left:0%"></div>
+          </div>
+          <p style="font-size:.75rem;color:rgba(255,255,255,.38);margin-top:8px;">Level: <span id="uvValue" style="color:#fff;font-weight:600;">—</span> <span id="uvLabel" style="color:rgba(255,255,255,.4);margin-left:6px;"></span></p>
+        </div>
+
+        <div class="glass panel fade-in d3">
+          <p class="sec-label">📊 Atmosphere</p>
+          <div class="bar-wrap">
+            <div>
+              <div class="bar-header"><span class="bar-lbl">Cloud Cover</span><span class="bar-val" id="cloudiness">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-sky" id="cloudinessBar" style="width:0%"></div></div>
+            </div>
+            <div>
+              <div class="bar-header"><span class="bar-lbl">Humidity</span><span class="bar-val" id="humidityBar2">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-blue" id="humidityBarEl" style="width:0%"></div></div>
+            </div>
+            <div>
+              <div class="bar-header"><span class="bar-lbl">Wind Force</span><span class="bar-val" id="windForce">—</span></div>
+              <div class="bar-track"><div class="bar-fill fill-wind" id="windBar" style="width:0%"></div></div>
+            </div>
+          </div>
+          <div class="coord-pill">📍 <span id="coords">—</span></div>
+        </div>
+      </div>
+
+      <!-- 5-Day Forecast -->
+      <div class="glass fc-wrap fade-in d4">
+        <p class="sec-label">📅 5-Day Forecast</p>
+        <div class="fc-strip" id="forecastCards"></div>
+      </div>
+
+    </div><!-- /weatherContent -->
+  </div><!-- /page -->
+
+  <script src="./src/app.js"></script>
+</body>
+</html>
